@@ -4,7 +4,7 @@ A simple and intuitive web-based application for various image-related tasks. Th
 
 ## Live Demo
 
-[Link to live demo](https://your-github-username.github.io/imgutls/) (Replace with your actual GitHub Pages link)
+[Link to live demo](https://yabaggi.github.io/imgutls/)
 
 ## Features
 
