@@ -1,9 +1,10 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Tab switching logic
+    // --- Tab Switching Logic ---
     const tabButtons = document.querySelectorAll('.tab-button');
     const tabContents = document.querySelectorAll('.tab-content');
     let iconsTabInitialized = false;
     let heroTabInitialized = false;
+    let faviconTabInitialized = false;
 
     tabButtons.forEach(button => {
         button.addEventListener('click', () => {
@@ -22,51 +23,55 @@ document.addEventListener('DOMContentLoaded', () => {
                 initializeHeroTab();
                 heroTabInitialized = true;
             }
+            if (button.dataset.tab === 'favicon-tab' && !faviconTabInitialized) {
+                initializeFaviconTab();
+                faviconTabInitialized = true;
+            }
         });
     });
 
-    // QR Code Generator Logic
-    const generateQrBtn = document.getElementById('generate-qr');
-    const downloadQrBtn = document.getElementById('download-qr');
-    const urlInput = document.getElementById('url');
-    const appNameInput = document.getElementById('appName');
-    const filenameInput = document.getElementById('filename');
-    const qrcodeCanvas = document.getElementById('qrcode');
+    // --- Initial Tab Initialization ---
+    const initialActiveTab = document.querySelector('.tab-button.active')?.dataset.tab;
+    if (initialActiveTab === 'icons-tab') {
+        initializeIconsTab();
+        iconsTabInitialized = true;
+    } else if (initialActiveTab === 'hero-tab') {
+        initializeHeroTab();
+        heroTabInitialized = true;
+    } else if (initialActiveTab === 'favicon-tab') {
+        initializeFaviconTab();
+        faviconTabInitialized = true;
+    }
 
+
+    // --- QR Code Generator Logic (No changes) ---
+    const generateQrBtn = document.getElementById('generate-qr');
     if (generateQrBtn) {
         generateQrBtn.addEventListener('click', () => {
-            const url = urlInput.value;
-            const appName = appNameInput.value;
-            const filename = filenameInput.value;
+            const url = document.getElementById('url').value;
+            const appName = document.getElementById('appName').value;
+            const filename = document.getElementById('filename').value;
+            const qrcodeCanvas = document.getElementById('qrcode');
+            const downloadQrBtn = document.getElementById('download-qr');
 
             if (url && appName && filename) {
                 const tempCanvas = document.createElement('canvas');
                 QRCode.toCanvas(tempCanvas, url, { width: 300, margin: 2 }, function (error) {
-                    if (error) {
-                        console.error(error);
-                        alert('Error generating QR code.');
-                        return;
-                    }
-
+                    if (error) { console.error(error); alert('Error generating QR code.'); return; }
                     const padding = 20;
                     const textHeight = 60;
-                    const newHeight = tempCanvas.height + textHeight + (padding * 2);
-
                     qrcodeCanvas.width = tempCanvas.width;
-                    qrcodeCanvas.height = newHeight;
-
+                    qrcodeCanvas.height = tempCanvas.height + textHeight + (padding * 2);
                     const ctx = qrcodeCanvas.getContext('2d');
                     ctx.fillStyle = 'white';
                     ctx.fillRect(0, 0, qrcodeCanvas.width, qrcodeCanvas.height);
                     ctx.drawImage(tempCanvas, 0, 0);
-
                     ctx.fillStyle = 'black';
                     ctx.font = '16px sans-serif';
                     ctx.textAlign = 'center';
                     ctx.fillText(appName, qrcodeCanvas.width / 2, tempCanvas.height + padding + 10);
                     ctx.font = '12px sans-serif';
                     ctx.fillText(url, qrcodeCanvas.width / 2, tempCanvas.height + padding + 30);
-
                     downloadQrBtn.href = qrcodeCanvas.toDataURL('image/png');
                     downloadQrBtn.download = `${filename}.png`;
                     downloadQrBtn.style.display = 'block';
@@ -77,195 +82,423 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Icon Generator Logic
+    // --- Shared Canvas Drawing Function ---
+    function drawDesignedCanvas(options) {
+        const canvas = document.createElement('canvas');
+        canvas.width = options.width;
+        canvas.height = options.height;
+        const ctx = canvas.getContext('2d');
+
+        const gradient = ctx.createLinearGradient(0, 0, options.width, options.height);
+        gradient.addColorStop(0, options.color1);
+        gradient.addColorStop(1, options.color2);
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, options.width, options.height);
+
+        if (options.text) {
+            ctx.fillStyle = options.textColor;
+            ctx.font = `${options.fontSize}px ${options.font}`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            let x = options.width / 2;
+            let y = options.height / 2;
+            if (options.gravity) {
+                if (options.gravity.includes('north')) y = options.fontSize / 2;
+                if (options.gravity.includes('south')) y = options.height - options.fontSize / 2;
+                if (options.gravity.includes('west')) x = options.fontSize / 2;
+                if (options.gravity.includes('east')) x = options.width - options.fontSize / 2;
+            }
+            ctx.fillText(options.text, x, y);
+        }
+        return canvas;
+    }
+    
+    function hexToRgb(hex) {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+        } : null;
+    }
+
+    function hexToRgba(hex, alpha) {
+        // First, try to convert from hex
+        let rgb = hexToRgb(hex);
+
+        // If that fails, it might be a named color like "red"
+        if (!rgb) {
+            const tempCtx = document.createElement('canvas').getContext('2d');
+            tempCtx.fillStyle = hex;
+            const hexColor = tempCtx.fillStyle; // The browser converts "red" to "#ff0000"
+            rgb = hexToRgb(hexColor);
+        }
+
+        if (rgb) {
+            return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+        }
+
+        // Fallback if color is still invalid
+        return `rgba(0, 0, 0, ${alpha})`;
+    }
+
+    // --- Icons & Logos Tab Logic ---
     function initializeIconsTab() {
+        // Main elements
+        const creationRadios = document.querySelectorAll('input[name="icon-creation"]');
+        const scratchOptions = document.getElementById('icon-scratch-options');
+        const imageOptions = document.getElementById('icon-image-options');
+        const imageEditOptions = document.getElementById('icon-image-edit-options');
         const generateIconBtn = document.getElementById('generate-icon');
         const downloadIconBtn = document.getElementById('download-icon');
         const iconCanvas = document.getElementById('icon-canvas');
-        const drawShapeSelect = document.getElementById('draw-shape');
-        const drawOptionsContainer = document.getElementById('draw-options');
+        const imageUpload = document.getElementById('icon-image-upload');
+        let uploadedImage = null;
+
+        // Drawing elements
         const addDrawingBtn = document.getElementById('add-drawing');
         const clearDrawingsBtn = document.getElementById('clear-drawings');
-
+        const drawShapeSelect = document.getElementById('draw-shape');
+        const drawOptionsDiv = document.getElementById('draw-options');
+        const predefinedPolygonGroup = document.getElementById('predefined-polygon-group');
+        const predefinedPolygonSelect = document.getElementById('predefined-polygon');
         let drawings = [];
 
-        const drawOptions = {
-            line: {
-                x1: { label: 'X1', type: 'number', value: 10 },
-                y1: { label: 'Y1', type: 'number', value: 10 },
-                x2: { label: 'X2', type: 'number', value: 100 },
-                y2: { label: 'Y2', type: 'number', value: 100 },
-                'stroke-color': { label: 'Color', type: 'color', value: '#ff0000' },
-                'stroke-width': { label: 'Width', type: 'number', value: 5 },
-            },
-            rectangle: {
-                x: { label: 'X', type: 'number', value: 50 },
-                y: { label: 'Y', type: 'number', value: 50 },
-                width: { label: 'Width', type: 'number', value: 100 },
-                height: { label: 'Height', type: 'number', value: 100 },
-                'fill-color': { label: 'Fill', type: 'color', value: '#0000ff' },
-                'stroke-color': { label: 'Stroke', type: 'color', value: '#000000' },
-                'stroke-width': { label: 'Stroke Width', type: 'number', value: 2 },
-            },
-            circle: {
-                cx: { label: 'CX', type: 'number', value: 100 },
-                cy: { label: 'CY', type: 'number', value: 100 },
-                radius: { label: 'Radius', type: 'number', value: 50 },
-                'fill-color': { label: 'Fill', type: 'color', value: '#00ff00' },
-                'stroke-color': { label: 'Stroke', type: 'color', value: '#000000' },
-                'stroke-width': { label: 'Stroke Width', type: 'number', value: 2 },
-            },
-            polygon: {
-                points: { label: 'Points (e.g., 10,10 50,20 30,60)', type: 'text', value: '10,10 50,20 30,60' },
-                'fill-color': { label: 'Fill', type: 'color', value: '#ffff00' },
-                'stroke-color': { label: 'Stroke', type: 'color', value: '#000000' },
-                'stroke-width': { label: 'Stroke Width', type: 'number', value: 2 },
+        function getPolygonPoints(cx, cy, r, sides) {
+            let points = [];
+            for (let i = 0; i < sides; i++) {
+                const angle = (i / sides) * 2 * Math.PI - Math.PI / 2;
+                points.push(`${(cx + r * Math.cos(angle)).toFixed(2)},${(cy + r * Math.sin(angle)).toFixed(2)}`);
             }
-        };
+            return points.join(' ');
+        }
+
+        function getStarPoints(cx, cy, spikes, outerRadius, innerRadius) {
+            let points = [];
+            const angleStep = Math.PI / spikes;
+            for (let i = 0; i < 2 * spikes; i++) {
+                const r = (i % 2 === 0) ? outerRadius : innerRadius;
+                const angle = i * angleStep - Math.PI / 2;
+                points.push(`${(cx + r * Math.cos(angle)).toFixed(2)},${(cy + r * Math.sin(angle)).toFixed(2)}`);
+            }
+            return points.join(' ');
+        }
+
+        function handlePredefinedPolygon() {
+            const shape = predefinedPolygonSelect.value;
+            const pointsInput = document.getElementById('draw-points');
+            if (!pointsInput) return;
+
+            const size = 512;
+            const c = size / 2;
+            const r = size / 2 - 20;
+
+            let points = '';
+            switch (shape) {
+                case 'pentagon': points = getPolygonPoints(c, c, r, 5); break;
+                case 'hexagon': points = getPolygonPoints(c, c, r, 6); break;
+                case 'five-point-star': points = getStarPoints(c, c, 5, r, r / 2.5); break;
+                case 'triangle': points = `${c},${c-r} ${c-r*1.15},${c+r*0.8} ${c+r*1.15},${c+r*0.8}`; break;
+                case 'irregular-7-point': points = "256,25 336,150 486,160 375,275 400,450 256,375 112,450 137,275 26,160 176,150"; break;
+                case 'diamond': points = "256,25 487,256 256,487 25,256"; break;
+                case 'abstract': points = "50,50 462,50 462,462 300,462 300,200 50,50"; break;
+                case 'house': points = "256,50 462,200 462,462 50,462 50,200"; break;
+                case 'octagon': points = getPolygonPoints(c, c, r, 8); break;
+                case 'irregular-star-flower': points = "256,25 300,150 450,125 350,256 450,387 300,362 256,487 212,362 62,387 162,256 62,125 212,150"; break;
+            }
+            pointsInput.value = points;
+        }
 
         function updateDrawOptions() {
-            if (!drawOptionsContainer) return;
-            drawOptionsContainer.innerHTML = '';
-            const selectedShape = drawShapeSelect.value;
-            const options = drawOptions[selectedShape];
-            for (const key in options) {
-                const option = options[key];
-                const div = document.createElement('div');
-                div.classList.add('form-group');
-                const label = document.createElement('label');
-                label.textContent = option.label;
-                const input = document.createElement('input');
-                input.type = option.type;
-                input.id = `draw-${key}`;
-                input.value = option.value;
-                if (option.type === 'text') input.style.width = '100%';
-                div.appendChild(label);
-                div.appendChild(input);
-                drawOptionsContainer.appendChild(div);
+            const shape = drawShapeSelect.value;
+            drawOptionsDiv.innerHTML = '';
+            predefinedPolygonGroup.style.display = 'none';
+
+            let fields = '';
+            switch (shape) {
+                case 'line':
+                    fields = `
+                        <div class="form-group-grid-4">
+                            <div><label>X1</label><input type="number" id="draw-x1" value="50"></div>
+                            <div><label>Y1</label><input type="number" id="draw-y1" value="50"></div>
+                            <div><label>X2</label><input type="number" id="draw-x2" value="462"></div>
+                            <div><label>Y2</label><input type="number" id="draw-y2" value="462"></div>
+                        </div>
+                        <div class="form-group"><label>Stroke Color</label><input type="color" id="draw-stroke-color" value="#ffffff"></div>
+                        <div class="form-group"><label>Stroke Opacity</label><input type="range" id="draw-stroke-opacity" min="0" max="1" step="0.05" value="1"></div>
+                        <div class="form-group"><label>Stroke Width</label><input type="number" id="draw-stroke-width" value="10"></div>
+                    `;
+                    break;
+                case 'rectangle':
+                    fields = `
+                        <div class="form-group-grid-4">
+                            <div><label>X</label><input type="number" id="draw-x" value="100"></div>
+                            <div><label>Y</label><input type="number" id="draw-y" value="100"></div>
+                            <div><label>Width</label><input type="number" id="draw-width" value="312"></div>
+                            <div><label>Height</label><input type="number" id="draw-height" value="312"></div>
+                        </div>
+                        <div class="form-group"><label>Fill Color</label><input type="color" id="draw-fill-color" value="#000000"></div>
+                        <div class="form-group"><label>Fill Opacity</label><input type="range" id="draw-fill-opacity" min="0" max="1" step="0.05" value="1"></div>
+                        <div class="form-group"><label>Stroke Color</label><input type="color" id="draw-stroke-color" value="#ffffff"></div>
+                        <div class="form-group"><label>Stroke Opacity</label><input type="range" id="draw-stroke-opacity" min="0" max="1" step="0.05" value="1"></div>
+                        <div class="form-group"><label>Stroke Width</label><input type="number" id="draw-stroke-width" value="10"></div>
+                    `;
+                    break;
+                case 'circle':
+                    fields = `
+                         <div class="form-group-grid-4">
+                            <div><label>CX</label><input type="number" id="draw-cx" value="256"></div>
+                            <div><label>CY</label><input type="number" id="draw-cy" value="256"></div>
+                            <div><label>Radius</label><input type="number" id="draw-r" value="150"></div>
+                        </div>
+                        <div class="form-group"><label>Fill Color</label><input type="color" id="draw-fill-color" value="#000000"></div>
+                        <div class="form-group"><label>Fill Opacity</label><input type="range" id="draw-fill-opacity" min="0" max="1" step="0.05" value="1"></div>
+                        <div class="form-group"><label>Stroke Color</label><input type="color" id="draw-stroke-color" value="#ffffff"></div>
+                        <div class="form-group"><label>Stroke Opacity</label><input type="range" id="draw-stroke-opacity" min="0" max="1" step="0.05" value="1"></div>
+                        <div class="form-group"><label>Stroke Width</label><input type="number" id="draw-stroke-width" value="10"></div>
+                    `;
+                    break;
+                case 'polygon':
+                    predefinedPolygonGroup.style.display = 'block';
+                    fields = `
+                        <div class="form-group">
+                            <label>Points (e.g., x1,y1 x2,y2)</label>
+                            <input type="text" id="draw-points" value="256,50 50,462 462,462">
+                        </div>
+                        <div class="form-group"><label>Fill Color</label><input type="color" id="draw-fill-color" value="#000000"></div>
+                        <div class="form-group"><label>Fill Opacity</label><input type="range" id="draw-fill-opacity" min="0" max="1" step="0.05" value="1"></div>
+                        <div class="form-group"><label>Stroke Color</label><input type="color" id="draw-stroke-color" value="#ffffff"></div>
+                        <div class="form-group"><label>Stroke Opacity</label><input type="range" id="draw-stroke-opacity" min="0" max="1" step="0.05" value="1"></div>
+                        <div class="form-group"><label>Stroke Width</label><input type="number" id="draw-stroke-width" value="10"></div>
+                    `;
+                    break;
             }
+            drawOptionsDiv.innerHTML = fields;
         }
 
-        if (drawShapeSelect) {
-            drawShapeSelect.addEventListener('change', updateDrawOptions);
+        function drawShapes(ctx) {
+            drawings.forEach(d => {
+                ctx.beginPath();
+                switch (d.shape) {
+                    case 'line':
+                        if (d.strokeWidth > 0) {
+                            ctx.strokeStyle = hexToRgba(d.stroke, d.strokeOpacity);
+                            ctx.lineWidth = d.strokeWidth;
+                            ctx.moveTo(d.x1, d.y1);
+                            ctx.lineTo(d.x2, d.y2);
+                            ctx.stroke();
+                        }
+                        break;
+                    case 'rectangle':
+                        ctx.fillStyle = hexToRgba(d.fill, d.fillOpacity);
+                        ctx.fillRect(d.x, d.y, d.width, d.height);
+                        if (d.strokeWidth > 0) {
+                            ctx.strokeStyle = hexToRgba(d.stroke, d.strokeOpacity);
+                            ctx.lineWidth = d.strokeWidth;
+                            ctx.strokeRect(d.x, d.y, d.width, d.height);
+                        }
+                        break;
+                    case 'circle':
+                        ctx.arc(parseFloat(d.cx), parseFloat(d.cy), parseFloat(d.r), 0, 2 * Math.PI);
+                        ctx.fillStyle = hexToRgba(d.fill, d.fillOpacity);
+                        ctx.fill();
+                        if (d.strokeWidth > 0) {
+                            ctx.strokeStyle = hexToRgba(d.stroke, d.strokeOpacity);
+                            ctx.lineWidth = d.strokeWidth;
+                            ctx.stroke();
+                        }
+                        break;
+                    case 'polygon':
+                        const points = d.points.trim().split(/\s+/).map(p => p.split(',').map(Number));
+                        if (points.length > 1 && points[0].length === 2) {
+                            ctx.moveTo(points[0][0], points[0][1]);
+                            for (let i = 1; i < points.length; i++) {
+                                if (points[i].length === 2) ctx.lineTo(points[i][0], points[i][1]);
+                            }
+                            ctx.closePath();
+                            ctx.fillStyle = hexToRgba(d.fill, d.fillOpacity);
+                            ctx.fill();
+                            if (d.strokeWidth > 0) {
+                                ctx.strokeStyle = hexToRgba(d.stroke, d.strokeOpacity);
+                                ctx.lineWidth = d.strokeWidth;
+                                ctx.stroke();
+                            }
+                        }
+                        break;
+                }
+            });
         }
 
-        if (addDrawingBtn) {
-            addDrawingBtn.addEventListener('click', () => {
-                const shape = { type: drawShapeSelect.value };
-                const options = drawOptionsContainer.querySelectorAll('input');
-                options.forEach(opt => {
-                    shape[opt.id.replace('draw-', '')] = opt.type === 'number' ? Number(opt.value) : opt.value;
-                });
-                drawings.push(shape);
+        // Edit controls
+        const editControls = [
+            'icon-crop-top', 'icon-crop-bottom', 'icon-crop-left', 'icon-crop-right',
+            'icon-brightness', 'icon-saturation', 'icon-hue', 'icon-apply-transparency',
+            'icon-transparent-color', 'icon-fuzz', 'icon-text-overlay', 'icon-font-overlay',
+            'font-size-overlay', 'text-color-overlay'
+        ];
+        const allControls = [
+            ...document.querySelectorAll('#icon-scratch-options input, #icon-scratch-options select'),
+            ...editControls.map(id => document.getElementById(id)),
+            ...document.querySelectorAll('input[name="shape"]'),
+            document.getElementById('icon-size'),
+            document.getElementById('icon-global-opacity')
+        ];
+
+        addDrawingBtn.addEventListener('click', () => {
+            const shape = drawShapeSelect.value;
+            const drawing = { shape };
+
+            switch (shape) {
+                case 'line':
+                    drawing.x1 = document.getElementById('draw-x1').value;
+                    drawing.y1 = document.getElementById('draw-y1').value;
+                    drawing.x2 = document.getElementById('draw-x2').value;
+                    drawing.y2 = document.getElementById('draw-y2').value;
+                    drawing.stroke = document.getElementById('draw-stroke-color').value;
+                    drawing.strokeOpacity = document.getElementById('draw-stroke-opacity').value;
+                    drawing.strokeWidth = document.getElementById('draw-stroke-width').value;
+                    break;
+                case 'rectangle':
+                    drawing.x = document.getElementById('draw-x').value;
+                    drawing.y = document.getElementById('draw-y').value;
+                    drawing.width = document.getElementById('draw-width').value;
+                    drawing.height = document.getElementById('draw-height').value;
+                    drawing.fill = document.getElementById('draw-fill-color').value;
+                    drawing.fillOpacity = document.getElementById('draw-fill-opacity').value;
+                    drawing.stroke = document.getElementById('draw-stroke-color').value;
+                    drawing.strokeOpacity = document.getElementById('draw-stroke-opacity').value;
+                    drawing.strokeWidth = document.getElementById('draw-stroke-width').value;
+                    break;
+                case 'circle':
+                    drawing.cx = document.getElementById('draw-cx').value;
+                    drawing.cy = document.getElementById('draw-cy').value;
+                    drawing.r = document.getElementById('draw-r').value;
+                    drawing.fill = document.getElementById('draw-fill-color').value;
+                    drawing.fillOpacity = document.getElementById('draw-fill-opacity').value;
+                    drawing.stroke = document.getElementById('draw-stroke-color').value;
+                    drawing.strokeOpacity = document.getElementById('draw-stroke-opacity').value;
+                    drawing.strokeWidth = document.getElementById('draw-stroke-width').value;
+                    break;
+                case 'polygon':
+                    drawing.points = document.getElementById('draw-points').value;
+                    drawing.fill = document.getElementById('draw-fill-color').value;
+                    drawing.fillOpacity = document.getElementById('draw-fill-opacity').value;
+                    drawing.stroke = document.getElementById('draw-stroke-color').value;
+                    drawing.strokeOpacity = document.getElementById('draw-stroke-opacity').value;
+                    drawing.strokeWidth = document.getElementById('draw-stroke-width').value;
+                    break;
+            }
+            drawings.push(drawing);
+            generateIcon();
+        });
+
+        clearDrawingsBtn.addEventListener('click', () => {
+            drawings = [];
+            generateIcon();
+        });
+
+        drawShapeSelect.addEventListener('change', updateDrawOptions);
+        predefinedPolygonSelect.addEventListener('change', handlePredefinedPolygon);
+        updateDrawOptions();
+
+        creationRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                const isScratch = radio.value === 'scratch';
+                scratchOptions.style.display = isScratch ? 'block' : 'none';
+                imageOptions.style.display = isScratch ? 'none' : 'block';
+                if (isScratch) {
+                    uploadedImage = null;
+                    imageEditOptions.style.display = 'none';
+                }
                 generateIcon();
             });
-        }
+        });
 
-        if (clearDrawingsBtn) {
-            clearDrawingsBtn.addEventListener('click', () => {
-                drawings = [];
-                generateIcon();
-            });
-        }
-
-        function drawAllShapes(ctx) {
-            drawings.forEach(shape => {
-                if (shape.type === 'line') drawLine(ctx, shape);
-                if (shape.type === 'rectangle') drawRectangle(ctx, shape);
-                if (shape.type === 'circle') drawCircle(ctx, shape);
-                if (shape.type === 'polygon') drawPolygon(ctx, shape);
-            });
-        }
-
-        function drawLine(ctx, shape) {
-            ctx.beginPath();
-            ctx.moveTo(shape.x1, shape.y1);
-            ctx.lineTo(shape.x2, shape.y2);
-            ctx.strokeStyle = shape['stroke-color'];
-            ctx.lineWidth = shape['stroke-width'];
-            ctx.stroke();
-        }
-
-        function drawRectangle(ctx, shape) {
-            ctx.beginPath();
-            ctx.rect(shape.x, shape.y, shape.width, shape.height);
-            ctx.fillStyle = shape['fill-color'];
-            ctx.fill();
-            ctx.strokeStyle = shape['stroke-color'];
-            ctx.lineWidth = shape['stroke-width'];
-            ctx.stroke();
-        }
-
-        function drawCircle(ctx, shape) {
-            ctx.beginPath();
-            ctx.arc(shape.cx, shape.cy, shape.radius, 0, 2 * Math.PI);
-            ctx.fillStyle = shape['fill-color'];
-            ctx.fill();
-            ctx.strokeStyle = shape['stroke-color'];
-            ctx.lineWidth = shape['stroke-width'];
-            ctx.stroke();
-        }
-
-        function drawPolygon(ctx, shape) {
-            const points = shape.points.split(' ').map(p => p.split(',').map(Number));
-            if (points.length < 2) return;
-            ctx.beginPath();
-            ctx.moveTo(points[0][0], points[0][1]);
-            for (let i = 1; i < points.length; i++) {
-                ctx.lineTo(points[i][0], points[i][1]);
-            }
-            ctx.closePath();
-            ctx.fillStyle = shape['fill-color'];
-            ctx.fill();
-            ctx.strokeStyle = shape['stroke-color'];
-            ctx.lineWidth = shape['stroke-width'];
-            ctx.stroke();
-        }
+        imageUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                uploadedImage = new Image();
+                uploadedImage.onload = () => {
+                    imageEditOptions.style.display = 'block';
+                    generateIcon();
+                };
+                uploadedImage.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
 
         function generateIcon() {
-            if (!iconCanvas) return;
-            const shape = document.querySelector('input[name="shape"]:checked').value;
+            const creationMethod = document.querySelector('input[name="icon-creation"]:checked').value;
             const sizeStr = document.getElementById('icon-size').value;
             const [width, height] = sizeStr.split('x').map(Number);
-            const color1 = document.getElementById('color1').value;
-            const color2 = document.getElementById('color2').value;
-            const text = document.getElementById('icon-text').value;
-            const font = document.getElementById('icon-font').value;
-            const fontSize = document.getElementById('font-size').value;
-            const textColor = document.getElementById('text-color').value;
-            const gravity = document.getElementById('gravity').value;
-
             iconCanvas.width = width;
             iconCanvas.height = height;
             const ctx = iconCanvas.getContext('2d');
+            ctx.clearRect(0, 0, width, height);
 
-            // Gradient background
-            const gradient = ctx.createLinearGradient(0, 0, width, height);
-            gradient.addColorStop(0, color1);
-            gradient.addColorStop(1, color2);
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, width, height);
+            if (creationMethod === 'scratch') {
+                const sourceCanvas = drawDesignedCanvas({
+                    width, height,
+                    color1: document.getElementById('color1').value,
+                    color2: document.getElementById('color2').value,
+                    text: document.getElementById('icon-text').value,
+                    font: document.getElementById('icon-font').value,
+                    fontSize: document.getElementById('font-size').value,
+                    textColor: document.getElementById('text-color').value,
+                    gravity: document.getElementById('gravity').value
+                });
+                ctx.drawImage(sourceCanvas, 0, 0);
+            } else if (uploadedImage) {
+                // Image editing pipeline
+                const top = parseInt(document.getElementById('icon-crop-top').value) || 0;
+                const bottom = parseInt(document.getElementById('icon-crop-bottom').value) || 0;
+                const left = parseInt(document.getElementById('icon-crop-left').value) || 0;
+                const right = parseInt(document.getElementById('icon-crop-right').value) || 0;
+                const brightness = document.getElementById('icon-brightness').value;
+                const saturation = document.getElementById('icon-saturation').value;
+                const hue = document.getElementById('icon-hue').value;
 
-            // Text
-            ctx.fillStyle = textColor;
-            ctx.font = `${fontSize}px ${font}`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
+                ctx.filter = `brightness(${brightness}%) saturate(${saturation}%) hue-rotate(${hue}deg)`;
+                ctx.drawImage(uploadedImage, left, top, uploadedImage.width - left - right, uploadedImage.height - top - bottom, 0, 0, width, height);
+                ctx.filter = 'none';
 
-            let x = width / 2;
-            let y = height / 2;
+                if (document.getElementById('icon-apply-transparency').checked) {
+                    const targetColor = hexToRgb(document.getElementById('icon-transparent-color').value);
+                    const fuzz = parseInt(document.getElementById('icon-fuzz').value);
+                    const imageData = ctx.getImageData(0, 0, width, height);
+                    const data = imageData.data;
+                    const fuzzFactor = (fuzz / 100) * 255 * Math.sqrt(3);
 
-            if (gravity.includes('north')) y = fontSize / 2;
-            if (gravity.includes('south')) y = height - fontSize / 2;
-            if (gravity.includes('west')) x = fontSize / 2;
-            if (gravity.includes('east')) x = width - fontSize / 2;
+                    for (let i = 0; i < data.length; i += 4) {
+                        const r = data[i];
+                        const g = data[i + 1];
+                        const b = data[i + 2];
+                        const distance = Math.sqrt(Math.pow(r - targetColor.r, 2) + Math.pow(g - targetColor.g, 2) + Math.pow(b - targetColor.b, 2));
+                        if (distance <= fuzzFactor) {
+                            data[i + 3] = 0; // Make transparent
+                        }
+                    }
+                    ctx.putImageData(imageData, 0, 0);
+                }
 
-            ctx.fillText(text, x, y);
+                const text = document.getElementById('icon-text-overlay').value;
+                if (text) {
+                    ctx.fillStyle = document.getElementById('text-color-overlay').value;
+                    ctx.font = `${document.getElementById('font-size-overlay').value}px ${document.getElementById('icon-font-overlay').value}`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(text, width / 2, height / 2);
+                }
+            } else {
+                downloadIconBtn.style.display = 'none';
+                return;
+            }
 
-            // Drawings
-            drawAllShapes(ctx);
+            drawShapes(ctx);
 
-            // Shape
+            const shape = document.querySelector('input[name="shape"]:checked').value;
             if (shape === 'round') {
                 ctx.globalCompositeOperation = 'destination-in';
                 ctx.beginPath();
@@ -274,49 +507,156 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.globalCompositeOperation = 'source-over';
             }
 
-            downloadIconBtn.href = iconCanvas.toDataURL('image/png');
-            downloadIconBtn.download = `icon-${sizeStr}.png`;
+            const iconFormat = document.getElementById('icon-format').value;
+            const iconFilename = document.getElementById('icon-filename').value;
+
+            const globalOpacity = document.getElementById('icon-global-opacity').value;
+            let finalCanvas = iconCanvas;
+            if (globalOpacity < 1) {
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = iconCanvas.width;
+                tempCanvas.height = iconCanvas.height;
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCtx.globalAlpha = globalOpacity;
+                tempCtx.drawImage(iconCanvas, 0, 0);
+                finalCanvas = tempCanvas;
+            }
+
+            downloadIconBtn.href = finalCanvas.toDataURL(iconFormat, 1.0);
+            downloadIconBtn.download = `${iconFilename}.${iconFormat.split('/')[1]}`;
             downloadIconBtn.style.display = 'block';
         }
 
-        if (generateIconBtn) {
-            generateIconBtn.addEventListener('click', generateIcon);
-        }
-
-        updateDrawOptions();
+        allControls.forEach(el => el?.addEventListener('input', generateIcon));
+        generateIconBtn.addEventListener('click', generateIcon);
         generateIcon();
     }
 
-    // Hero Image Editor Logic
+    // --- Favicon Tab Logic ---
+    function initializeFaviconTab() {
+        const creationRadios = document.querySelectorAll('input[name="favicon-creation"]');
+        const scratchOptions = document.getElementById('favicon-scratch-options');
+        const imageOptions = document.getElementById('favicon-image-options');
+        const generateBtn = document.getElementById('generate-favicon');
+        const previewCanvas = document.getElementById('favicon-canvas-preview');
+        const imageUpload = document.getElementById('favicon-image-upload');
+
+        let uploadedImage = null;
+        const previewSize = 128;
+        previewCanvas.width = previewSize;
+        previewCanvas.height = previewSize;
+
+        creationRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                const isScratch = radio.value === 'scratch';
+                scratchOptions.style.display = isScratch ? 'block' : 'none';
+                imageOptions.style.display = isScratch ? 'none' : 'block';
+                if (isScratch) uploadedImage = null;
+                generateFaviconPreview();
+            });
+        });
+
+        imageUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                uploadedImage = new Image();
+                uploadedImage.onload = () => generateFaviconPreview();
+                uploadedImage.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        function generateFaviconPreview() {
+            const creationMethod = document.querySelector('input[name="favicon-creation"]:checked').value;
+            const ctx = previewCanvas.getContext('2d');
+            ctx.clearRect(0, 0, previewSize, previewSize);
+
+            let sourceCanvas;
+            if (creationMethod === 'scratch') {
+                sourceCanvas = drawDesignedCanvas({
+                    width: 512, height: 512,
+                    color1: document.getElementById('favicon-color1').value,
+                    color2: document.getElementById('favicon-color2').value,
+                    text: document.getElementById('favicon-text').value,
+                    font: document.getElementById('favicon-font').value,
+                    fontSize: document.getElementById('favicon-font-size').value,
+                    textColor: document.getElementById('favicon-text-color').value,
+                });
+            } else if (uploadedImage) {
+                sourceCanvas = uploadedImage;
+            } else {
+                return;
+            }
+            ctx.drawImage(sourceCanvas, 0, 0, previewSize, previewSize);
+        }
+
+        async function generateFaviconPack() {
+            const creationMethod = document.querySelector('input[name="favicon-creation"]:checked').value;
+            const zip = new JSZip();
+            const selectedSizes = Array.from(document.querySelectorAll('.favicon-size:checked')).map(cb => parseInt(cb.value));
+            if (selectedSizes.length === 0) { alert('Please select at least one favicon size.'); return; }
+
+            let sourceCanvas;
+            if (creationMethod === 'scratch') {
+                 sourceCanvas = drawDesignedCanvas({
+                    width: 512, height: 512,
+                    color1: document.getElementById('favicon-color1').value,
+                    color2: document.getElementById('favicon-color2').value,
+                    text: document.getElementById('favicon-text').value,
+                    font: document.getElementById('favicon-font').value,
+                    fontSize: document.getElementById('favicon-font-size').value,
+                    textColor: document.getElementById('favicon-text-color').value,
+                });
+            } else if (uploadedImage) {
+                sourceCanvas = uploadedImage;
+            } else {
+                alert('Please design or upload an image for the favicon.'); return;
+            }
+
+            for (const size of selectedSizes) {
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = size; tempCanvas.height = size;
+                tempCanvas.getContext('2d').drawImage(sourceCanvas, 0, 0, size, size);
+                const blob = await (await fetch(tempCanvas.toDataURL('image/png'))).blob();
+                zip.file(`favicon-${size}x${size}.png`, blob);
+            }
+
+            zip.generateAsync({ type: 'blob' }).then(content => {
+                const filename = document.getElementById('favicon-filename').value || 'favicon-pack';
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(content);
+                link.download = `${filename}.zip`;
+                link.click();
+            });
+        }
+
+        document.querySelectorAll('#favicon-scratch-options input, #favicon-scratch-options select').forEach(el => {
+            el.addEventListener('input', generateFaviconPreview);
+        });
+        generateBtn.addEventListener('click', generateFaviconPack);
+        generateFaviconPreview();
+    }
+
+    // --- Hero Image Editor Logic (No changes) ---
     function initializeHeroTab() {
         const imageUpload = document.getElementById('image-upload');
         const heroCanvas = document.getElementById('hero-canvas');
-        const cropTop = document.getElementById('crop-top');
-        const cropBottom = document.getElementById('crop-bottom');
-        const cropLeft = document.getElementById('crop-left');
-        const cropRight = document.getElementById('crop-right');
-        const outputWidth = document.getElementById('output-width');
-        const outputHeight = document.getElementById('output-height');
-        const outputFormat = document.getElementById('output-format');
-        const quality = document.getElementById('quality');
         const downloadHeroBtn = document.getElementById('download-hero');
-        const originalSizeInfo = document.getElementById('original-size-info');
-        const generatedSizeInfo = document.getElementById('generated-size-info');
-
         let originalImage = null;
 
         if (imageUpload) {
             imageUpload.addEventListener('change', (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     originalImage = new Image();
                     originalImage.onload = () => {
-                        originalSizeInfo.textContent = `Original size: ${originalImage.width}x${originalImage.height}`;
-                        outputWidth.value = originalImage.width;
-                        outputHeight.value = originalImage.height;
+                        document.getElementById('original-size-info').textContent = `Original: ${originalImage.width}x${originalImage.height}`;
+                        document.getElementById('output-width').value = originalImage.width;
+                        document.getElementById('output-height').value = originalImage.height;
                         redrawHeroImage();
                     };
                     originalImage.src = event.target.result;
@@ -327,67 +667,44 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function redrawHeroImage() {
             if (!originalImage || !heroCanvas) return;
-
-            const top = parseInt(cropTop.value) || 0;
-            const bottom = parseInt(cropBottom.value) || 0;
-            const left = parseInt(cropLeft.value) || 0;
-            const right = parseInt(cropRight.value) || 0;
-
-            const sx = left;
-            const sy = top;
+            const top = parseInt(document.getElementById('crop-top').value) || 0;
+            const bottom = parseInt(document.getElementById('crop-bottom').value) || 0;
+            const left = parseInt(document.getElementById('crop-left').value) || 0;
+            const right = parseInt(document.getElementById('crop-right').value) || 0;
             const sWidth = originalImage.width - left - right;
             const sHeight = originalImage.height - top - bottom;
-
-            const outWidth = parseInt(outputWidth.value) || sWidth;
-            const outHeight = parseInt(outputHeight.value) || sHeight;
-
+            const outWidth = parseInt(document.getElementById('output-width').value) || sWidth;
+            const outHeight = parseInt(document.getElementById('output-height').value) || sHeight;
             heroCanvas.width = outWidth;
             heroCanvas.height = outHeight;
-
-            const heroCtx = heroCanvas.getContext('2d');
-            heroCtx.drawImage(originalImage, sx, sy, sWidth, sHeight, 0, 0, outWidth, outHeight);
+            heroCanvas.getContext('2d').drawImage(originalImage, left, top, sWidth, sHeight, 0, 0, outWidth, outHeight);
             updateGeneratedImageSize();
         }
 
         function updateGeneratedImageSize() {
-            if (!heroCanvas.width || !heroCanvas.height) return;
-            const format = outputFormat.value;
-            const qualityValue = parseFloat(quality.value);
+            const format = document.getElementById('output-format').value;
+            const qualityValue = parseFloat(document.getElementById('quality').value);
             const dataUrl = heroCanvas.toDataURL(format, qualityValue);
             const head = 'data:image/png;base64,';
             const sizeInBytes = Math.round((dataUrl.length - head.length) * 3 / 4);
-            const sizeInKb = (sizeInBytes / 1024).toFixed(2);
-            generatedSizeInfo.textContent = `Generated size: ${sizeInKb} KB`;
+            document.getElementById('generated-size-info').textContent = `Generated: ${(sizeInBytes / 1024).toFixed(2)} KB`;
         }
 
-        [cropTop, cropBottom, cropLeft, cropRight, outputWidth, outputHeight, outputFormat, quality].forEach(input => {
-            if (input) {
-                input.addEventListener('input', redrawHeroImage);
-            }
+        ['crop-top', 'crop-bottom', 'crop-left', 'crop-right', 'output-width', 'output-height', 'output-format', 'quality'].forEach(id => {
+            document.getElementById(id)?.addEventListener('input', redrawHeroImage);
         });
 
         if (downloadHeroBtn) {
             downloadHeroBtn.addEventListener('click', () => {
-                if (!originalImage) {
-                    alert('Please upload an image first.');
-                    return;
-                }
-
-                const format = outputFormat.value;
-                const qualityValue = parseFloat(quality.value);
-                const dataUrl = heroCanvas.toDataURL(format, qualityValue);
-
+                if (!originalImage) { alert('Please upload an image first.'); return; }
+                const format = document.getElementById('output-format').value;
+                const qualityValue = parseFloat(document.getElementById('quality').value);
+                const heroFilename = document.getElementById('hero-filename').value;
                 const a = document.createElement('a');
-                a.href = dataUrl;
-                a.download = `hero-image.${format.split('/')[1]}`;
+                a.href = heroCanvas.toDataURL(format, qualityValue);
+                a.download = `${heroFilename}.${format.split('/')[1]}`;
                 a.click();
             });
         }
-    }
-
-    // Initial setup for the default tab
-    if (document.querySelector('.tab-button.active').dataset.tab === 'icons-tab') {
-        initializeIconsTab();
-        iconsTabInitialized = true;
     }
 });
