@@ -43,8 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
         faviconTabInitialized = true;
     }
 
-
-    // --- QR Code Generator Logic (No changes) ---
+    // --- QR Code Generator Logic ---
     const generateQrBtn = document.getElementById('generate-qr');
     if (generateQrBtn) {
         generateQrBtn.addEventListener('click', () => {
@@ -55,9 +54,19 @@ document.addEventListener('DOMContentLoaded', () => {
             const downloadQrBtn = document.getElementById('download-qr');
 
             if (url && appName && filename) {
+                generateQrBtn.classList.add('loading');
+                generateQrBtn.disabled = true;
+
                 const tempCanvas = document.createElement('canvas');
                 QRCode.toCanvas(tempCanvas, url, { width: 300, margin: 2 }, function (error) {
-                    if (error) { console.error(error); alert('Error generating QR code.'); return; }
+                    generateQrBtn.classList.remove('loading');
+                    generateQrBtn.disabled = false;
+
+                    if (error) { 
+                        console.error(error); 
+                        alert('Error generating QR code.'); 
+                        return; 
+                    }
                     const padding = 20;
                     const textHeight = 60;
                     qrcodeCanvas.width = tempCanvas.width;
@@ -123,14 +132,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function hexToRgba(hex, alpha) {
-        // First, try to convert from hex
         let rgb = hexToRgb(hex);
 
-        // If that fails, it might be a named color like "red"
         if (!rgb) {
             const tempCtx = document.createElement('canvas').getContext('2d');
             tempCtx.fillStyle = hex;
-            const hexColor = tempCtx.fillStyle; // The browser converts "red" to "#ff0000"
+            const hexColor = tempCtx.fillStyle;
             rgb = hexToRgb(hexColor);
         }
 
@@ -138,13 +145,11 @@ document.addEventListener('DOMContentLoaded', () => {
             return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
         }
 
-        // Fallback if color is still invalid
         return `rgba(0, 0, 0, ${alpha})`;
     }
 
     // --- Icons & Logos Tab Logic ---
     function initializeIconsTab() {
-        // Main elements
         const creationRadios = document.querySelectorAll('input[name="icon-creation"]');
         const scratchOptions = document.getElementById('icon-scratch-options');
         const imageOptions = document.getElementById('icon-image-options');
@@ -163,6 +168,28 @@ document.addEventListener('DOMContentLoaded', () => {
         const predefinedPolygonGroup = document.getElementById('predefined-polygon-group');
         const predefinedPolygonSelect = document.getElementById('predefined-polygon');
         let drawings = [];
+
+        // Update range value displays
+        function updateRangeDisplay(rangeId, displayId) {
+            const range = document.getElementById(rangeId);
+            const display = document.getElementById(displayId);
+            if (range && display) {
+                display.textContent = rangeId.includes('opacity') 
+                    ? Math.round(range.value * 100)
+                    : Math.round(range.value);
+                range.addEventListener('input', () => {
+                    display.textContent = rangeId.includes('opacity') 
+                        ? Math.round(range.value * 100)
+                        : Math.round(range.value);
+                });
+            }
+        }
+
+        updateRangeDisplay('icon-brightness', 'brightness-value');
+        updateRangeDisplay('icon-saturation', 'saturation-value');
+        updateRangeDisplay('icon-hue', 'hue-value');
+        updateRangeDisplay('icon-fuzz', 'fuzz-value');
+        updateRangeDisplay('icon-global-opacity', 'opacity-value');
 
         function getPolygonPoints(cx, cy, r, sides) {
             let points = [];
@@ -219,57 +246,57 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'line':
                     fields = `
                         <div class="form-group-grid-4">
-                            <div><label>X1</label><input type="number" id="draw-x1" value="50"></div>
-                            <div><label>Y1</label><input type="number" id="draw-y1" value="50"></div>
-                            <div><label>X2</label><input type="number" id="draw-x2" value="462"></div>
-                            <div><label>Y2</label><input type="number" id="draw-y2" value="462"></div>
+                            <div class="form-group"><label>X1</label><input type="number" id="draw-x1" value="50"></div>
+                            <div class="form-group"><label>Y1</label><input type="number" id="draw-y1" value="50"></div>
+                            <div class="form-group"><label>X2</label><input type="number" id="draw-x2" value="462"></div>
+                            <div class="form-group"><label>Y2</label><input type="number" id="draw-y2" value="462"></div>
                         </div>
                         <div class="form-group"><label>Stroke Color</label><input type="color" id="draw-stroke-color" value="#ffffff"></div>
                         <div class="form-group"><label>Stroke Opacity</label><input type="range" id="draw-stroke-opacity" min="0" max="1" step="0.05" value="1"></div>
-                        <div class="form-group"><label>Stroke Width</label><input type="number" id="draw-stroke-width" value="10"></div>
+                        <div class="form-group"><label>Stroke Width</label><input type="number" id="draw-stroke-width" value="10" min="0"></div>
                     `;
                     break;
                 case 'rectangle':
                     fields = `
                         <div class="form-group-grid-4">
-                            <div><label>X</label><input type="number" id="draw-x" value="100"></div>
-                            <div><label>Y</label><input type="number" id="draw-y" value="100"></div>
-                            <div><label>Width</label><input type="number" id="draw-width" value="312"></div>
-                            <div><label>Height</label><input type="number" id="draw-height" value="312"></div>
+                            <div class="form-group"><label>X</label><input type="number" id="draw-x" value="100"></div>
+                            <div class="form-group"><label>Y</label><input type="number" id="draw-y" value="100"></div>
+                            <div class="form-group"><label>Width</label><input type="number" id="draw-width" value="312" min="0"></div>
+                            <div class="form-group"><label>Height</label><input type="number" id="draw-height" value="312" min="0"></div>
                         </div>
                         <div class="form-group"><label>Fill Color</label><input type="color" id="draw-fill-color" value="#000000"></div>
                         <div class="form-group"><label>Fill Opacity</label><input type="range" id="draw-fill-opacity" min="0" max="1" step="0.05" value="1"></div>
                         <div class="form-group"><label>Stroke Color</label><input type="color" id="draw-stroke-color" value="#ffffff"></div>
                         <div class="form-group"><label>Stroke Opacity</label><input type="range" id="draw-stroke-opacity" min="0" max="1" step="0.05" value="1"></div>
-                        <div class="form-group"><label>Stroke Width</label><input type="number" id="draw-stroke-width" value="10"></div>
+                        <div class="form-group"><label>Stroke Width</label><input type="number" id="draw-stroke-width" value="10" min="0"></div>
                     `;
                     break;
                 case 'circle':
                     fields = `
                          <div class="form-group-grid-4">
-                            <div><label>CX</label><input type="number" id="draw-cx" value="256"></div>
-                            <div><label>CY</label><input type="number" id="draw-cy" value="256"></div>
-                            <div><label>Radius</label><input type="number" id="draw-r" value="150"></div>
+                            <div class="form-group"><label>Center X</label><input type="number" id="draw-cx" value="256"></div>
+                            <div class="form-group"><label>Center Y</label><input type="number" id="draw-cy" value="256"></div>
+                            <div class="form-group"><label>Radius</label><input type="number" id="draw-r" value="150" min="0"></div>
                         </div>
                         <div class="form-group"><label>Fill Color</label><input type="color" id="draw-fill-color" value="#000000"></div>
                         <div class="form-group"><label>Fill Opacity</label><input type="range" id="draw-fill-opacity" min="0" max="1" step="0.05" value="1"></div>
                         <div class="form-group"><label>Stroke Color</label><input type="color" id="draw-stroke-color" value="#ffffff"></div>
                         <div class="form-group"><label>Stroke Opacity</label><input type="range" id="draw-stroke-opacity" min="0" max="1" step="0.05" value="1"></div>
-                        <div class="form-group"><label>Stroke Width</label><input type="number" id="draw-stroke-width" value="10"></div>
+                        <div class="form-group"><label>Stroke Width</label><input type="number" id="draw-stroke-width" value="10" min="0"></div>
                     `;
                     break;
                 case 'polygon':
                     predefinedPolygonGroup.style.display = 'block';
                     fields = `
                         <div class="form-group">
-                            <label>Points (e.g., x1,y1 x2,y2)</label>
-                            <input type="text" id="draw-points" value="256,50 50,462 462,462">
+                            <label>Points (x1,y1 x2,y2 ...)</label>
+                            <input type="text" id="draw-points" value="256,50 50,462 462,462" placeholder="x1,y1 x2,y2 x3,y3">
                         </div>
                         <div class="form-group"><label>Fill Color</label><input type="color" id="draw-fill-color" value="#000000"></div>
                         <div class="form-group"><label>Fill Opacity</label><input type="range" id="draw-fill-opacity" min="0" max="1" step="0.05" value="1"></div>
                         <div class="form-group"><label>Stroke Color</label><input type="color" id="draw-stroke-color" value="#ffffff"></div>
                         <div class="form-group"><label>Stroke Opacity</label><input type="range" id="draw-stroke-opacity" min="0" max="1" step="0.05" value="1"></div>
-                        <div class="form-group"><label>Stroke Width</label><input type="number" id="draw-stroke-width" value="10"></div>
+                        <div class="form-group"><label>Stroke Width</label><input type="number" id="draw-stroke-width" value="10" min="0"></div>
                     `;
                     break;
             }
@@ -329,7 +356,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // Edit controls
         const editControls = [
             'icon-crop-top', 'icon-crop-bottom', 'icon-crop-left', 'icon-crop-right',
             'icon-brightness', 'icon-saturation', 'icon-hue', 'icon-apply-transparency',
@@ -451,7 +477,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 ctx.drawImage(sourceCanvas, 0, 0);
             } else if (uploadedImage) {
-                // Image editing pipeline
                 const top = parseInt(document.getElementById('icon-crop-top').value) || 0;
                 const bottom = parseInt(document.getElementById('icon-crop-bottom').value) || 0;
                 const left = parseInt(document.getElementById('icon-crop-left').value) || 0;
@@ -477,7 +502,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const b = data[i + 2];
                         const distance = Math.sqrt(Math.pow(r - targetColor.r, 2) + Math.pow(g - targetColor.g, 2) + Math.pow(b - targetColor.b, 2));
                         if (distance <= fuzzFactor) {
-                            data[i + 3] = 0; // Make transparent
+                            data[i + 3] = 0;
                         }
                     }
                     ctx.putImageData(imageData, 0, 0);
@@ -596,7 +621,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const creationMethod = document.querySelector('input[name="favicon-creation"]:checked').value;
             const zip = new JSZip();
             const selectedSizes = Array.from(document.querySelectorAll('.favicon-size:checked')).map(cb => parseInt(cb.value));
-            if (selectedSizes.length === 0) { alert('Please select at least one favicon size.'); return; }
+            if (selectedSizes.length === 0) { 
+                alert('Please select at least one favicon size.'); 
+                return; 
+            }
+
+            generateBtn.classList.add('loading');
+            generateBtn.disabled = true;
 
             let sourceCanvas;
             if (creationMethod === 'scratch') {
@@ -612,12 +643,16 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (uploadedImage) {
                 sourceCanvas = uploadedImage;
             } else {
-                alert('Please design or upload an image for the favicon.'); return;
+                alert('Please design or upload an image for the favicon.'); 
+                generateBtn.classList.remove('loading');
+                generateBtn.disabled = false;
+                return;
             }
 
             for (const size of selectedSizes) {
                 const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = size; tempCanvas.height = size;
+                tempCanvas.width = size; 
+                tempCanvas.height = size;
                 tempCanvas.getContext('2d').drawImage(sourceCanvas, 0, 0, size, size);
                 const blob = await (await fetch(tempCanvas.toDataURL('image/png'))).blob();
                 zip.file(`favicon-${size}x${size}.png`, blob);
@@ -629,6 +664,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 link.href = URL.createObjectURL(content);
                 link.download = `${filename}.zip`;
                 link.click();
+                
+                generateBtn.classList.remove('loading');
+                generateBtn.disabled = false;
             });
         }
 
@@ -639,12 +677,21 @@ document.addEventListener('DOMContentLoaded', () => {
         generateFaviconPreview();
     }
 
-    // --- Hero Image Editor Logic (No changes) ---
+    // --- Hero Image Editor Logic ---
     function initializeHeroTab() {
         const imageUpload = document.getElementById('image-upload');
         const heroCanvas = document.getElementById('hero-canvas');
         const downloadHeroBtn = document.getElementById('download-hero');
+        const qualityRange = document.getElementById('quality');
+        const qualityValue = document.getElementById('quality-value');
         let originalImage = null;
+
+        if (qualityRange && qualityValue) {
+            qualityValue.textContent = Math.round(qualityRange.value * 100);
+            qualityRange.addEventListener('input', () => {
+                qualityValue.textContent = Math.round(qualityRange.value * 100);
+            });
+        }
 
         if (imageUpload) {
             imageUpload.addEventListener('change', (e) => {
@@ -654,7 +701,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 reader.onload = (event) => {
                     originalImage = new Image();
                     originalImage.onload = () => {
-                        document.getElementById('original-size-info').textContent = `Original: ${originalImage.width}x${originalImage.height}`;
+                        document.getElementById('original-size-info').textContent = `Original: ${originalImage.width}×${originalImage.height}px`;
                         document.getElementById('output-width').value = originalImage.width;
                         document.getElementById('output-height').value = originalImage.height;
                         redrawHeroImage();
@@ -687,7 +734,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const dataUrl = heroCanvas.toDataURL(format, qualityValue);
             const head = 'data:image/png;base64,';
             const sizeInBytes = Math.round((dataUrl.length - head.length) * 3 / 4);
-            document.getElementById('generated-size-info').textContent = `Generated: ${(sizeInBytes / 1024).toFixed(2)} KB`;
+            document.getElementById('generated-size-info').textContent = `Generated: ${(sizeInBytes / 1024).toFixed(2)} KB (${heroCanvas.width}×${heroCanvas.height}px)`;
         }
 
         ['crop-top', 'crop-bottom', 'crop-left', 'crop-right', 'output-width', 'output-height', 'output-format', 'quality'].forEach(id => {
@@ -696,7 +743,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (downloadHeroBtn) {
             downloadHeroBtn.addEventListener('click', () => {
-                if (!originalImage) { alert('Please upload an image first.'); return; }
+                if (!originalImage) { 
+                    alert('Please upload an image first.'); 
+                    return; 
+                }
                 const format = document.getElementById('output-format').value;
                 const qualityValue = parseFloat(document.getElementById('quality').value);
                 const heroFilename = document.getElementById('hero-filename').value;
